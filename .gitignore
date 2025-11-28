@@ -144,6 +144,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Project data (large MusicBrainz dumps)
+data/raw/musicbrainz/
+
 # Spyder project settings
 .spyderproject
 .spyproject
