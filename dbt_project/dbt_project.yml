@@ -1,0 +1,21 @@
+name: 'music_warehouse'
+version: '1.0.0'
+config_version: 2
+
+profile: 'music_warehouse'
+
+model_paths: ['models']
+seed_paths: ['seeds']
+test_paths: ['tests']
+analysis_paths: ['analysis']
+macro_paths: ['macros']
+snapshot_paths: ['snapshots']
+
+target-path: 'target'
+clean-targets:
+  - 'target'
+  - 'dbt_packages'
+
+models:
+  music_warehouse:
+    materialized: view
