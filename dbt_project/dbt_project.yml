@@ -1,20 +1,20 @@
 name: 'music_warehouse'
 version: '1.0.0'
-config_version: 2
+config-version: 2
 
 profile: 'music_warehouse'
 
-model_paths: ['models']
-seed_paths: ['seeds']
-test_paths: ['tests']
-analysis_paths: ['analysis']
-macro_paths: ['macros']
-snapshot_paths: ['snapshots']
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
 
-target-path: 'target'
+target-path: "target"
 clean-targets:
-  - 'target'
-  - 'dbt_packages'
+  - "target"
+  - "dbt_packages"
 
 models:
   music_warehouse:

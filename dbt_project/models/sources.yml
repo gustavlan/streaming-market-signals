@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: musicbrainz
+    schema: main
+    tables:
+      - name: raw_musicbrainz_labels
+        description: "Raw JSON ingest of MusicBrainz labels"
+
+  - name: spotify
+    schema: main
+    tables:
+      - name: daily_charts
+        description: "Daily top 200 streams from Kworb"
