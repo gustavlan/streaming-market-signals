@@ -9,4 +9,8 @@ music_warehouse:
       extensions:
         - httpfs
         - parquet
-      threads: 4
+      threads: 1
+      settings:
+        # Cap DuckDB's RAM usage so it doesn't get killed (needed for parentl label query)
+        memory_limit: '3GB'
+        temp_directory: '/opt/airflow/data/tmp'

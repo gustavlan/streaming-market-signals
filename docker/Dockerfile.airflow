@@ -19,6 +19,8 @@ RUN pip install --no-cache-dir \
     playwright \
     beautifulsoup4 \
     lxml \
+    polars \
+    networkx \
     pyarrow
 
 # NOW switch to root to install SYSTEM dependencies for Playwright
