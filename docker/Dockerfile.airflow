@@ -7,10 +7,10 @@ RUN apt-get update && \
     apt-get install -y git build-essential && \
     apt-get clean
 
-# Switch back to airflow user to install ALL python packages
+# Switch back to airflow user to install python packages
 USER airflow
 
-# Install dbt, duckdb, and playwright PYTHON package here
+# Install dbt, duckdb, and playwright package here
 RUN pip install --no-cache-dir \
     "dbt-core>=1.8" \
     "dbt-duckdb>=1.8" \
@@ -24,10 +24,9 @@ RUN pip install --no-cache-dir \
     pyarrow \
     spotipy
 
-# NOW switch to root to install SYSTEM dependencies for Playwright
+# Switch to root to install SYSTEM dependencies for playwright
 USER root
-# We use the full path to the playwright executable we just installed
-# because it lives in /home/airflow/.local/bin
+# Use the full path to the playwright executable
 RUN /home/airflow/.local/bin/playwright install-deps
 
 # Switch back to airflow user to install the actual browsers
