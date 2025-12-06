@@ -4,7 +4,7 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 
 URL = "https://kworb.net/spotify/country/global_daily.html"
-OUTPUT_DIR = "data/raw/kworb"
+OUTPUT_DIR = "/opt/airflow/data/raw/kworb"
 
 def scrape_kworb():
     print(f"Starting scrape for {URL}")
