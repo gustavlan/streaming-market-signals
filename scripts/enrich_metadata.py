@@ -1,6 +1,8 @@
 import os
 import duckdb
 import spotipy
+import pandas as pd
+import time
 
 CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
@@ -51,3 +53,34 @@ def enrich_artist():
     results = []
 
     for _, row in missing_tracks.iterrows():
+        track = row['track_name']
+        artist = row['artist_name']
+        search_query = f"track:{track} artist:{artist}"
+
+        try: # search spotify for the track
+            response = sp.search(q=search_query, type='track', limit=1)
+            items = response['tracks']['items']
+            if items:
+                track_data = items[0]
+                album_data = sp.album(track_data['album']['id'])
+                label = album_data['label']
+                spotify_id = track_data['id']
+                print(f"Found: {track} by {artist} - Label: {label}")
+                results.append({
+                    'track_name': track,
+                    'artist_name': artist,
+                    'spotify_label': label,
+                    'spotify_track_id': spotify_id,
+                    'updated_at': pd.Timestamp.now()
+                })
+            else:
+                print(f"No results for: {track} by {artist}")
+                time.sleep(2)  # brief pause to respect rate limits
+        
+        except Exception as e:
+            print(f"Error fetching data for {track} by {artist}: {e}")
+            time.sleep(5)  # longer pause on error
+
+        time.sleep(0.5)  # brief pause to respect rate limits
+
+    if results:
