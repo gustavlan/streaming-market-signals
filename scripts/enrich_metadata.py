@@ -35,7 +35,7 @@ def enrich_artist():
     """)
 
     query = """
-        SELECT DISTINCT c.track_name, c.artist_name,
+        SELECT DISTINCT c.track_name, c.artist_name
         FROM stg_combined_charts c
         LEFT JOIN dim_track_metadata m
             ON c.track_name = m.track_name AND c.artist_name = m.artist_name
@@ -43,7 +43,7 @@ def enrich_artist():
         LIMIT 50 -- Limit to 50 for safety testing purposes
     """
 
-    missing_tracks = con.sql(query).df
+    missing_tracks = con.sql(query).df()
 
     if missing_tracks.empty:
         print("No new tracks to enrich.")
@@ -86,7 +86,9 @@ def enrich_artist():
     if results:
         print(f"Inserting {len(results)} enriched records into dim_track_metadata...")
         df_results = pd.DataFrame(results)
-        con.sql("INSERT INTO dim_track_metadata SELECT * FROM df_results")
+        con.register("df_results", df_results)
+        con.execute("INSERT INTO dim_track_metadata SELECT * FROM df_results")
+        con.unregister("df_results")
         print("Success")
     con.close()
 
