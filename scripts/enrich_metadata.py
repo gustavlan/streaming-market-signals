@@ -40,7 +40,7 @@ def enrich_artist():
         LEFT JOIN dim_track_metadata m
             ON c.track_name = m.track_name AND c.artist_name = m.artist_name
         WHERE m.spotify_label IS NULL
-        LIMIT 50 -- Limit to 50 for safety testing purposes
+        LIMIT 250 -- Increased limit for better coverage
     """
 
     missing_tracks = con.sql(query).df()
