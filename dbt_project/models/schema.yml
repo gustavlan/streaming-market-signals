@@ -1,0 +1,113 @@
+version: 2
+
+sources:
+  - name: musicbrainz
+    schema: main
+    tables:
+      - name: raw_musicbrainz_labels
+        description: Raw MusicBrainz label data with nested relationships JSON
+        
+  - name: kworb
+    schema: main
+    tables:
+      - name: raw_kworb_charts
+        description: Daily Spotify chart data scraped from Kworb
+        
+  - name: spotify_enrichment
+    schema: main
+    tables:
+      - name: dim_track_metadata
+        description: Track to label mapping from Spotify API
+
+models:
+  - name: stg_musicbrainz_labels
+    description: Staging layer for MusicBrainz labels with standardized column names
+    columns:
+      - name: label_id
+        description: MusicBrainz label UUID
+      - name: label_name
+        description: Label name
+      - name: relations
+        description: JSON array of label relationships
+
+  - name: stg_combined_charts
+    description: Combined daily chart data from all Kworb parquet files
+    columns:
+      - name: chart_date
+        description: Date of the chart
+      - name: artist_name
+        description: Artist name
+      - name: track_name
+        description: Track title
+      - name: daily_streams
+        description: Number of streams on this date
+
+  - name: stg_track_metadata_normalized
+    description: Track metadata with normalized label names for fuzzy matching
+    columns:
+      - name: spotify_track_id
+        description: Spotify track ID
+      - name: spotify_label
+        description: Original label from Spotify
+      - name: normalized_label
+        description: Lowercased, punctuation-stripped label for matching
+
+  - name: stg_dim_labels_normalized
+    description: Label dimension with normalized names for joining
+    columns:
+      - name: label_id
+        description: MusicBrainz label UUID
+      - name: normalized_label
+        description: Normalized label name
+      - name: market_share_group
+        description: Parent group classification
+
+  - name: int_label_relationships
+    description: Flattened label-to-label relationships from MusicBrainz
+    columns:
+      - name: child_label_id
+        description: Source label in the relationship
+      - name: parent_label_id
+        description: Target label in the relationship
+      - name: relationship_type
+        description: Type of relationship (label ownership, imprint, etc.)
+      - name: direction
+        description: MusicBrainz relationship direction (forward/backward)
+
+  - name: int_charts_with_track_id
+    description: Charts joined to Spotify track IDs via fuzzy matching
+    columns:
+      - name: chart_date
+        description: Date of the chart
+      - name: spotify_track_id
+        description: Matched Spotify track ID
+      - name: daily_streams
+        description: Stream count
+
+  - name: dim_labels
+    description: Label dimension with ultimate parent resolved via ownership hierarchy
+    columns:
+      - name: label_id
+        description: MusicBrainz label UUID
+      - name: label_name
+        description: Label name
+      - name: ultimate_parent_name
+        description: Name of the top-level parent in ownership chain
+      - name: ownership_path
+        description: Full path from label to ultimate parent
+      - name: market_share_group
+        description: "Classification: Universal Music Group, Sony Music Entertainment, Warner Music Group, or Independent / Other"
+
+  - name: fact_market_share
+    description: Incremental fact table aggregating daily streams by parent group
+    columns:
+      - name: chart_date
+        description: Date of aggregation
+      - name: parent_group
+        description: Market share group (UMG/Sony/Warner/Independent)
+      - name: total_streams
+        description: Sum of daily streams for this group
+      - name: track_count
+        description: Distinct tracks in this group
+      - name: market_share_pct
+        description: Percentage of total daily streams
