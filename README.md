@@ -64,26 +64,26 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    subgraph sources
+    subgraph sources[Sources]
         S1[raw_musicbrainz_labels]
         S2[raw_kworb_charts]
         S3[dim_track_metadata]
-        S4[dim_labels]:::python
+        S4[dim_labels]
     end
     
-    subgraph staging
+    subgraph staging[Staging]
         STG1[stg_musicbrainz_labels]
         STG2[stg_combined_charts]
         STG3[stg_track_metadata_normalized]
     end
     
-    subgraph intermediate
+    subgraph intermediate[Intermediate]
         INT1[int_label_relationships]
         INT2[int_charts_with_track_id]
         INT3[int_labels_normalized]
     end
     
-    subgraph marts
+    subgraph marts[Marts]
         FACT[fact_market_share]
     end
     
@@ -94,8 +94,6 @@ flowchart LR
     STG3 --> FACT
     INT3 --> FACT
     INT2 --> FACT
-    
-    classDef python fill:#e1f5fe,stroke:#01579b
 ```
 
 *Note: `dim_labels` is created by Python/NetworkX (not dbt) via graph traversal of MusicBrainz ownership relationships.*
