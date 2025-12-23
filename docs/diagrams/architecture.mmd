@@ -1,0 +1,23 @@
+flowchart TB
+    subgraph Sources
+        KW[Kworb Charts]
+        SP[Spotify API]
+        MB[MusicBrainz Dumps]
+    end
+    
+    subgraph Airflow
+        ING[Daily Ingestion]
+        ENR[Metadata Enrichment]
+        SET[Setup Pipeline]
+    end
+    
+    subgraph DuckDB
+        RAW[(Raw Tables)]
+        STG[(Staging)]
+        MART[(Marts)]
+    end
+    
+    KW --> ING --> RAW
+    SP --> ENR --> RAW
+    MB --> SET --> RAW
+    RAW --> STG --> MART

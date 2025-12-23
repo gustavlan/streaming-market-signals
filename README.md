@@ -68,32 +68,37 @@ flowchart LR
         S1[raw_musicbrainz_labels]
         S2[raw_kworb_charts]
         S3[dim_track_metadata]
+        S4[dim_labels]:::python
     end
     
     subgraph staging
         STG1[stg_musicbrainz_labels]
         STG2[stg_combined_charts]
         STG3[stg_track_metadata_normalized]
-        STG4[stg_dim_labels_normalized]
     end
     
     subgraph intermediate
         INT1[int_label_relationships]
         INT2[int_charts_with_track_id]
+        INT3[int_labels_normalized]
     end
     
     subgraph marts
-        DIM[dim_labels]
         FACT[fact_market_share]
     end
     
-    S1 --> STG1 --> INT1 --> DIM --> STG4
+    S1 --> STG1 --> INT1
     S2 --> STG2 --> INT2
     S3 --> STG3 --> INT2
+    S4 --> INT3
     STG3 --> FACT
-    STG4 --> FACT
+    INT3 --> FACT
     INT2 --> FACT
+    
+    classDef python fill:#e1f5fe,stroke:#01579b
 ```
+
+*Note: `dim_labels` is created by Python/NetworkX (not dbt) via graph traversal of MusicBrainz ownership relationships.*
 
 ## Quickstart
 

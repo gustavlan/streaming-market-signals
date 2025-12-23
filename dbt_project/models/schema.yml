@@ -19,6 +19,24 @@ sources:
       - name: dim_track_metadata
         description: Track to label mapping from Spotify API
 
+  - name: python_models
+    schema: main
+    description: Tables created by Python scripts (not dbt models)
+    tables:
+      - name: dim_labels
+        description: Label dimension with ultimate parent resolved via NetworkX graph traversal. Created by scripts/build_hierarchy.py
+        columns:
+          - name: label_id
+            description: MusicBrainz label UUID
+          - name: label_name
+            description: Label name
+          - name: ultimate_parent_name
+            description: Name of the top-level parent in ownership chain
+          - name: ownership_path
+            description: Full path from label to ultimate parent
+          - name: market_share_group
+            description: "Classification: UMG, Sony, Warner, or Independent / Other"
+
 models:
   - name: stg_musicbrainz_labels
     description: Staging layer for MusicBrainz labels with standardized column names
@@ -52,15 +70,19 @@ models:
       - name: normalized_label
         description: Lowercased, punctuation-stripped label for matching
 
-  - name: stg_dim_labels_normalized
-    description: Label dimension with normalized names for joining
+  - name: int_labels_normalized
+    description: Intermediate model normalizing dim_labels for fuzzy matching to Spotify labels
     columns:
       - name: label_id
         description: MusicBrainz label UUID
-      - name: normalized_label
-        description: Normalized label name
+      - name: label_name
+        description: Original label name from MusicBrainz
+      - name: ultimate_parent_name
+        description: Top-level parent in ownership chain
       - name: market_share_group
-        description: Parent group classification
+        description: Parent group classification (UMG, Sony, Warner, Independent)
+      - name: normalized_label
+        description: Lowercased, punctuation-stripped label for fuzzy matching
 
   - name: int_label_relationships
     description: Flattened label-to-label relationships from MusicBrainz
@@ -83,20 +105,6 @@ models:
         description: Matched Spotify track ID
       - name: daily_streams
         description: Stream count
-
-  - name: dim_labels
-    description: Label dimension with ultimate parent resolved via ownership hierarchy
-    columns:
-      - name: label_id
-        description: MusicBrainz label UUID
-      - name: label_name
-        description: Label name
-      - name: ultimate_parent_name
-        description: Name of the top-level parent in ownership chain
-      - name: ownership_path
-        description: Full path from label to ultimate parent
-      - name: market_share_group
-        description: "Classification: Universal Music Group, Sony Music Entertainment, Warner Music Group, or Independent / Other"
 
   - name: fact_market_share
     description: Incremental fact table aggregating daily streams by parent group

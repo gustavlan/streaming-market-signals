@@ -1,0 +1,10 @@
+flowchart LR
+  subgraph setup_musicbrainz_data
+    LBL[load_labels_to_duckdb\npython scripts/load_musicbrainz.py]
+    RUN[run_dbt_models\ndbt run --select stg_musicbrainz_labels int_label_relationships dim_labels]
+    LBL --> RUN
+  end
+
+  subgraph music_market_share_ingest
+    SCR[scrape_kworb_data\npython scripts/scrape_kworb.py]
+  end

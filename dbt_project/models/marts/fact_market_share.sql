@@ -42,7 +42,7 @@ label_hierarchy as (
         normalized_label,
         market_share_group,
         ultimate_parent_name
-    from {{ ref('stg_dim_labels_normalized') }}
+    from {{ ref('int_labels_normalized') }}
 ),
 
 joined as (

@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 
 with labels as (
-    select * from {{ ref('dim_labels') }}
+    select * from {{ source('python_models', 'dim_labels') }}
 )
 
 select
