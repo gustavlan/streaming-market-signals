@@ -111,11 +111,30 @@ models:
     columns:
       - name: chart_date
         description: Date of aggregation
+        tests:
+          - not_null
       - name: parent_group
         description: Market share group (UMG/Sony/Warner/Independent)
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Universal Music Group', 'Sony Music Entertainment', 'Warner Music Group', 'Independent / Other', 'Independent / Unmapped']
       - name: total_streams
         description: Sum of daily streams for this group
+        tests:
+          - not_null
       - name: track_count
         description: Distinct tracks in this group
+        tests:
+          - not_null
       - name: market_share_pct
         description: Percentage of total daily streams
+        tests:
+          - not_null
+    tests:
+      - unique:
+          column_name: "chart_date || '-' || parent_group"
+      - dbt_utils.expression_is_true:
+          expression: "market_share_pct >= 0 AND market_share_pct <= 1"
+          config:
+            where: "market_share_pct IS NOT NULL"
