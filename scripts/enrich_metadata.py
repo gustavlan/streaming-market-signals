@@ -1,8 +1,14 @@
 import os
+import logging
 import duckdb
 import spotipy
 import pandas as pd
-import time
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from spotipy.exceptions import SpotifyException
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 CLIENT_ID = os.getenv("SPOTIPY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIPY_CLIENT_SECRET")
@@ -14,15 +20,41 @@ def enrich_artist():
     if not CLIENT_ID or not CLIENT_SECRET:
         raise ValueError("Spotify CLIENT_ID and CLIENT_SECRET must be set as environment variables.")
     
-    print("Connecting to DuckDB...")
+    logger.info("Connecting to DuckDB...")
     con = duckdb.connect(DB_PATH)
 
     # Initialize Spotipy client, ClientCredentials is used since only public data is needed
     auth_manager = spotipy.oauth2.SpotifyClientCredentials(client_id=CLIENT_ID, client_secret=CLIENT_SECRET)
     sp = spotipy.Spotify(auth_manager=auth_manager)
 
-    # Find arist/track IDs that are missing mapping
-    print("Finding artists missing label mapping...")
+    # Retry decorator for Spotify API calls with exponential backoff
+    @retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        retry=retry_if_exception_type((SpotifyException, ConnectionError)),
+        before_sleep=lambda retry_state: logger.warning(
+            f"Retry {retry_state.attempt_number}/5 after error. Waiting {retry_state.next_action.sleep}s..."
+        )
+    )
+    def fetch_track_metadata(track: str, artist: str) -> dict | None:
+        """Fetch track metadata from Spotify with retry logic."""
+        search_query = f"track:{track} artist:{artist}"
+        response = sp.search(q=search_query, type='track', limit=1)
+        items = response['tracks']['items']
+        if items:
+            track_data = items[0]
+            album_data = sp.album(track_data['album']['id'])
+            return {
+                'track_name': track,
+                'artist_name': artist,
+                'spotify_label': album_data['label'],
+                'spotify_track_id': track_data['id'],
+                'updated_at': pd.Timestamp.now()
+            }
+        return None
+
+    # Find artist/track IDs that are missing mapping
+    logger.info("Finding artists missing label mapping...")
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS dim_track_metadata (
@@ -46,50 +78,35 @@ def enrich_artist():
     missing_tracks = con.sql(query).df()
 
     if missing_tracks.empty:
-        print("No new tracks to enrich.")
+        logger.info("No new tracks to enrich.")
         return
-    print(f"Found {len(missing_tracks)} tracks to enrich, connecting to spotify API...")
+    logger.info(f"Found {len(missing_tracks)} tracks to enrich, connecting to Spotify API...")
 
     results = []
+    failed_count = 0
 
     for _, row in missing_tracks.iterrows():
         track = row['track_name']
         artist = row['artist_name']
-        search_query = f"track:{track} artist:{artist}"
 
-        try: # search spotify for the track
-            response = sp.search(q=search_query, type='track', limit=1)
-            items = response['tracks']['items']
-            if items:
-                track_data = items[0]
-                album_data = sp.album(track_data['album']['id'])
-                label = album_data['label']
-                spotify_id = track_data['id']
-                print(f"Found: {track} by {artist} - Label: {label}")
-                results.append({
-                    'track_name': track,
-                    'artist_name': artist,
-                    'spotify_label': label,
-                    'spotify_track_id': spotify_id,
-                    'updated_at': pd.Timestamp.now()
-                })
+        try:
+            metadata = fetch_track_metadata(track, artist)
+            if metadata:
+                logger.info(f"Found: {track} by {artist} - Label: {metadata['spotify_label']}")
+                results.append(metadata)
             else:
-                print(f"No results for: {track} by {artist}")
-                time.sleep(2)  # brief pause to respect rate limits
-        
+                logger.debug(f"No results for: {track} by {artist}")
         except Exception as e:
-            print(f"Error fetching data for {track} by {artist}: {e}")
-            time.sleep(5)  # longer pause on error
-
-        time.sleep(0.5)  # brief pause to respect rate limits
+            failed_count += 1
+            logger.error(f"Failed to fetch data for {track} by {artist} after retries: {e}")
 
     if results:
-        print(f"Inserting {len(results)} enriched records into dim_track_metadata...")
+        logger.info(f"Inserting {len(results)} enriched records into dim_track_metadata...")
         df_results = pd.DataFrame(results)
         con.register("df_results", df_results)
         con.execute("INSERT INTO dim_track_metadata SELECT * FROM df_results")
         con.unregister("df_results")
-        print("Success")
+        logger.info(f"Success. Enriched {len(results)} tracks, {failed_count} failures.")
     con.close()
 
 if __name__ == "__main__":
