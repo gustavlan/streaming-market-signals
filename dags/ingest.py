@@ -16,8 +16,8 @@ with DAG(
     default_args=default_args,
     description='Daily pipeline: scrape charts, enrich metadata via Spotify API, build dbt marts',
     schedule_interval='0 9 * * *',
-    start_date=datetime(2024, 1, 1),
-    catchup=False,
+    start_date=datetime(2025, 12, 18),
+    catchup=True,
     tags=['music', 'ingestion', 'dbt'],
 ) as dag:
 
