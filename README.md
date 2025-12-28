@@ -4,7 +4,7 @@ End-to-end alternative data pipeline that constructs a proprietary dataset track
 
 ```mermaid
 flowchart LR
-    A["Spotify Charts\n(Alt Data)"] --> B["Label Enrichment"] --> C["Entity Resolution\n(Graph Theory)"] --> D["Market Share\nTime Series"] --> E["Stock Correlation\n& Alpha Signals"]
+    A["Spotify Charts<br/>(Alt Data)"] --> B["Label Enrichment"] --> C["Entity Resolution<br/>(Graph Theory)"] --> D["Market Share<br/>Time Series"] --> E["Stock Correlation<br/>& Alpha Signals"]
 ```
 
 ## Results
