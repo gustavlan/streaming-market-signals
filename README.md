@@ -37,58 +37,24 @@ flowchart TB
     end
 
     subgraph Data["Data Warehouse"]
-        Enrich --> RAW
-        Stocks --> RAW
-        RAW --> STG --> MART
+        Load -.-> |Insert| RAW_Charts[Raw Charts]
+        Enrich -.-> |Update| RAW_Meta[Raw Metadata]
+        Stocks -.-> |Insert| RAW_Fin[Raw Financials]
+        
+        RAW_Charts --> STG
+        RAW_Meta --> STG
+        RAW_Fin --> STG
+        STG --> MART
     end
 ```
 
 Daily charts are scraped from Kworb via Playwright. A trigger in Airflow checks the staging area for new tracks and only calls the Spotify API if metadata is missing, saving API quota and execution time. Financial data is fetched independently. dbt transforms resolve ownership hierarchies and aggregate streams.
 
-**Stack:** Docker Compose · Airflow 2.10 · DuckDB · dbt-core · NetworkX
-
-## dbt Lineage
-
-```mermaid
-flowchart LR
-    subgraph sources[Sources]
-        S1[raw_musicbrainz_labels]
-        S2[raw_kworb_charts]
-        S3[dim_track_metadata]
-        S4[dim_labels]
-    end
-    
-    subgraph staging[Staging]
-        STG1[stg_musicbrainz_labels]
-        STG2[stg_combined_charts]
-        STG3[stg_track_metadata_normalized]
-    end
-    
-    subgraph intermediate[Intermediate]
-        INT1[int_label_relationships]
-        INT2[int_charts_with_track_id]
-        INT3[int_labels_normalized]
-    end
-    
-    subgraph marts[Marts]
-        FACT[fact_market_share]
-    end
-    
-    S1 --> STG1 --> INT1
-    S2 --> STG2 --> INT2
-    S3 --> STG3 --> INT2
-    S4 --> INT3
-    STG3 --> FACT
-    INT3 --> FACT
-    INT2 --> FACT
-```
-
-*Note: `dim_labels` is created by Python/NetworkX (not dbt) via graph traversal of MusicBrainz ownership relationships.*
+**Stack:** Docker · Airflow · DuckDB · dbt · NetworkX
 
 ## Entity Resolution via Graph Theory
 
-A key technical challenge is resolving the ultimate parent company to a tradable entity for thousands of sub-labels. For example:
-- "pgLang, under exclusive license to Interscope Records" → Interscope → Universal Music Group
+A key  challenge is resolving the ultimate parent company to a tradable entity for thousands of sub-labels. For example, "pgLang, under exclusive license to Interscope Records" → Interscope → Universal Music Group
 
 The [`scripts/build_hierarchy.py`](scripts/build_hierarchy.py) script uses NetworkX to:
 1. Build a directed graph of 64K+ label-to-label ownership relationships from MusicBrainz
