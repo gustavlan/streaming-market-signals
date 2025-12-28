@@ -35,6 +35,7 @@ flowchart TB
     subgraph Airflow
         ING[Daily Ingestion]
         ENR[Metadata Enrichment]
+        FIN[Financials]
         SET[Setup Pipeline]
     end
     
@@ -47,10 +48,11 @@ flowchart TB
     KW --> ING --> RAW
     SP --> ENR --> RAW
     MB --> SET --> RAW
+    FIN --> RAW
     RAW --> STG --> MART
 ```
 
-Daily charts are scraped from Kworb via Playwright, enriched with label metadata from Spotify's API, then joined against MusicBrainz's 321K label taxonomy. dbt transforms resolve ownership hierarchies and aggregate streams into an incremental fact table by parent group.
+Daily charts are scraped from Kworb via Playwright, enriched with label metadata from Spotify's API, then joined against MusicBrainz's 321K label taxonomy. Financial data is fetched daily from Yahoo Finance. dbt transforms resolve ownership hierarchies and aggregate streams into an incremental fact table by parent group.
 
 **Stack:** Docker Compose · Airflow 2.10 · DuckDB · dbt-core · NetworkX
 
