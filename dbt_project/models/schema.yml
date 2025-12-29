@@ -1,23 +1,11 @@
 version: 2
 
 sources:
-  - name: musicbrainz
-    schema: main
-    tables:
-      - name: raw_musicbrainz_labels
-        description: Raw MusicBrainz label data with nested relationships JSON
-        
   - name: kworb
     schema: main
     tables:
       - name: raw_kworb_charts
         description: Daily Spotify chart data scraped from Kworb
-        
-  - name: spotify_enrichment
-    schema: main
-    tables:
-      - name: dim_track_metadata
-        description: Track to label mapping from Spotify API
 
   - name: python_models
     schema: main
