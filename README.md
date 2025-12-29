@@ -4,7 +4,7 @@ End-to-end alternative data pipeline that constructs a proprietary dataset track
 
 ```mermaid
 flowchart LR
-    A["Spotify Charts<br/>(Alt Data)"] --> B["Label Enrichment"] --> C["Entity Resolution<br/>(Graph Theory)"] --> D["Market Share<br/>Time Series"] --> E["Stock Correlation<br/>& Alpha Signals"]
+    A["Spotify Charts\n(Alt Data)"] --> B["Label Enrichment"] --> C["Entity Resolution\n(Graph Theory)"] --> D["Market Share\nTime Series"] --> E["Stock Correlation\n& Alpha Signals"]
 ```
 
 ## Results
@@ -24,49 +24,57 @@ The 85% reported here is higher than the commonly cited 65-70% for the big 3 bec
 
 ## Architecture
 
+Daily charts are scraped from Kworb via Playwright, enriched with label metadata from Spotify's API, then joined against MusicBrainz's 321K label taxonomy. dbt transforms resolve ownership hierarchies and aggregate streams into an incremental fact table by parent group.
+
+**Stack:** Docker Compose · Airflow 2.10 · DuckDB · dbt-core · NetworkX
+
 ```mermaid
-flowchart TB
-    subgraph Ingest["music_market_share_ingest (scheduled 09:00)"]
-        direction TB
-        Scrape[Scrape Kworb] --> Trigger[Trigger Pipeline]
-        Trigger --> Wait[Wait for Pipeline]
-        Wait --> DBT[dbt Build]
-    end
+flowchart LR
+  subgraph Sources
+    KW["Kworb charts"];
+    MB["MusicBrainz dump"];
+    SP["Spotify API"];
+    YF["Yahoo Finance"];
+  end
 
-    subgraph Pipeline["music_market_share_pipeline (triggered)"]
-        direction TB
-        Load[Load to DuckDB] --> Check{New Tracks?}
-        Check -- Yes --> Enrich[Spotify API Enrichment]
-        Check -- No --> Skip[Skip API Calls]
-        Enrich --> Complete[pipeline_complete]
-        Skip --> Complete
-    end
+  subgraph Airflow
+    SETUP["setup_musicbrainz_data"];
+    INGEST["music_market_share_ingest"];
+    PIPE["music_market_share_pipeline"];
+    FIN["music_financials_daily"];
+    INGEST --> PIPE;
+  end
 
-    subgraph Financials["music_financials_daily (scheduled 09:15)"]
-        Stocks[Fetch Yahoo Finance]
-    end
+  subgraph Warehouse
+    DUCK[("DuckDB: music_warehouse.duckdb")];
+    RAW["Raw tables (ingested)"];
+    STG["Staging (dbt)"];
+    INT["Intermediate (dbt)"];
+    MART["Mart: fact_market_share"];
+    DUCK --> RAW --> STG --> INT --> MART;
+    DIM["dim_labels"];
+  end
 
-    Trigger -.-> |TriggerDagRunOperator| Load
-    Complete -.-> |ExternalTaskSensor| Wait
+  subgraph Analytics
+    NB["market_share_alpha.ipynb (signals + correlation)"];
+  end
 
-    subgraph Data["Data Warehouse"]
-        Scrape -.-> RAW_Charts[Raw Charts]
-        Enrich -.-> RAW_Meta[Raw Metadata]
-        Stocks -.-> RAW_Fin[Raw Financials]
-        RAW_Charts --> STG
-        RAW_Meta --> STG
-        RAW_Fin --> STG
-        STG --> MART
-    end
+  KW --> INGEST --> DUCK;
+  MB --> SETUP --> DUCK;
+  SP --> PIPE --> DUCK;
+  YF --> FIN --> DUCK;
+
+  SETUP -. builds .-> DIM;
+  DIM -. used in transforms .-> INT;
+
+  MART --> NB;
+  DUCK --> NB;
 ```
 
-Daily charts are scraped from Kworb via Playwright. The ingest DAG then **triggers** the pipeline DAG and **waits** for it to complete before running dbt. A **Smart Trigger** in the pipeline checks the staging area for new tracks and only calls the Spotify API if metadata is missing, saving API quota and execution time. Financial data is fetched independently on an offset schedule to avoid DuckDB write contention.
-
-**Stack:** Docker · Airflow · DuckDB · dbt · NetworkX
 
 ## Entity Resolution via Graph Theory
 
-A key  challenge is resolving the ultimate parent company to a tradable entity for thousands of sub-labels. For example, "pgLang, under exclusive license to Interscope Records" → Interscope → Universal Music Group
+A key challenge is resolving the ultimate parent company to a tradable entity for thousands of sub-labels. For example: "pgLang, under exclusive license to Interscope Records" → Interscope → Universal Music Group. The `setup_musicbrainz_data` workflow produces the label hierarchy dimension (`dim_labels`).
 
 The [`scripts/build_hierarchy.py`](scripts/build_hierarchy.py) script uses NetworkX to:
 1. Build a directed graph of 64K+ label-to-label ownership relationships from MusicBrainz
@@ -77,13 +85,8 @@ This approach handles complex nested ownership that would be impossible to resol
 
 ## Quantitative Analysis
 
-The [`notebooks/market_share_alpha.ipynb`](notebooks/market_share_alpha.ipynb) notebook explores market share trends of the big 3 with moving averages, momentum signals, Z-score deviations, rate-of-change indicators, correlations of market share vs UMG.AS, WMG, SONY stock prices, and lead/lag analysis.
+The [`notebooks/market_share_alpha.ipynb`](notebooks/market_share_alpha.ipynb) notebook explores: Market share trends of the big 3 with moving averages. Momentum signals, Z-score deviations, rate-of-change indicators. Stock Correlation,Market share vs UMG.AS, WMG, SONY stock prices.Lead/Lag Analysis, does streaming momentum predict stock returns?
 
-To run the analysis:
-```bash
-# Open the notebook (Data is already fetched by Airflow)
-jupyter notebook notebooks/market_share_alpha.ipynb
-```
 
 ## Quickstart
 
@@ -92,7 +95,7 @@ cp .env.example .env  # Add Spotify credentials for enrichment
 docker compose up --build
 ```
 
-Open Airflow at `localhost:8080` (admin/admin). Trigger `setup_musicbrainz_data`, then unpause both `music_market_share_ingest` and `music_market_share_pipeline` (the pipeline DAG is trigger-only but must be unpaused to accept triggers).
+Open Airflow at `localhost:8080` (admin/admin). Trigger `setup_musicbrainz_data`, then unpause `music_market_share_ingest`.
 
 Query results:
 ```bash
@@ -106,18 +109,18 @@ duckdb data/music_warehouse.duckdb "
 
 | Source | Description | Update |
 |--------|-------------|--------|
-| [Kworb](https://kworb.net) | Daily Spotify global charts | Daily 09:00 (Airflow) |
-| [MusicBrainz](https://musicbrainz.org) | Label ownership relationships | One-off / Manual |
-| Spotify API | Track → album → label metadata | Triggered (smart enrichment) |
-| Yahoo Finance | UMG.AS, WMG, SONY stock prices | Daily 09:15 (Airflow) |
+| [Kworb](https://kworb.net) | Daily Spotify global charts | Daily scrape |
+| [MusicBrainz](https://musicbrainz.org) | Label ownership relationships | Manual dump load |
+| Spotify API | Track → album → label metadata | On-demand enrichment |
+| Yahoo Finance | UMG.AS, WMG, SONY stock prices | On-demand fetch |
 
 ## Future Work
 
-- **Merlin integration** — Cross-reference indie labels against Merlin member list to distinguish independent from indie distributed by major.
-- **Backtesting framework** — Build simple trading strategies based on market share momentum signals
-- **Granger causality** — Statistical tests to validate predictive relationships
-- **Earnings correlation** — Map quarterly market share trends to earnings surprises
-- **Multi-platform expansion** — Add Apple Music, Amazon Music for broader coverage
+- Merlin integration — Cross-reference indie labels against Merlin member list to distinguish independent from indie distributed by major.
+- Backtesting framework — Build simple trading strategies based on market share momentum signals
+- Granger causality — Statistical tests to validate predictive relationships
+- Earnings correlation — Map quarterly market share trends to earnings surprises
+- Multi-platform expansion — Add Apple Music, Amazon Music for broader coverage
 
 ## License
 
