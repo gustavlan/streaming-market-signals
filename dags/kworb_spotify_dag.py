@@ -1,6 +1,7 @@
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.operators.empty import EmptyOperator
 from datetime import datetime, timedelta
 import duckdb
 import os
@@ -8,6 +9,7 @@ import os
 # Configuration
 DB_PATH = '/opt/airflow/data/music_warehouse.duckdb'
 SCRIPTS_DIR = '/opt/airflow/scripts'
+
 
 def load_kworb_to_duckdb():
     """
@@ -22,13 +24,15 @@ def load_kworb_to_duckdb():
     """)
     con.close()
 
+
 def check_if_enrichment_needed():
     """
     Returns True if there are tracks in staging that are missing from the metadata table.
+    Also ensures dim_track_metadata table exists (critical for dbt on fresh DB).
     """
     con = duckdb.connect(DB_PATH)
     
-    # Ensure metadata table exists
+    # Ensure metadata table exists (so dbt doesn't fail on fresh warehouse)
     con.execute("""
         CREATE TABLE IF NOT EXISTS dim_track_metadata (
             track_name VARCHAR,
@@ -58,6 +62,7 @@ def check_if_enrichment_needed():
     print(f"Found {count} tracks requiring enrichment.")
     return count > 0
 
+
 default_args = {
     'owner': 'airflow',
     'retries': 1,
@@ -67,31 +72,28 @@ default_args = {
 with DAG(
     'music_market_share_pipeline',
     default_args=default_args,
-    schedule_interval='@daily',
+    description='Load Kworb data and enrich with Spotify metadata (triggered by ingest DAG)',
+    schedule_interval=None,  # Trigger-only: called by music_market_share_ingest
     start_date=datetime(2024, 1, 1),
     catchup=False,
+    max_active_runs=1,
+    tags=['music', 'pipeline', 'spotify'],
 ) as dag:
 
-    # 1. Scrape Kworb Data
-    scrape_kworb = BashOperator(
-        task_id='scrape_kworb',
-        bash_command=f'python {SCRIPTS_DIR}/scrape_kworb.py',
-        env={'DATA_DIR': '/opt/airflow/data'}
-    )
-
-    # 2. Load Parquet to DuckDB (Required for enrichment script to see the data)
+    # 1. Load Parquet to DuckDB (Required for enrichment script to see the data)
     load_data = PythonOperator(
         task_id='load_kworb_to_duckdb',
         python_callable=load_kworb_to_duckdb
     )
 
-    # 3. Smart Trigger to check if need to run the expensive API calls
+    # 2. Smart Trigger to check if need to run the expensive API calls
+    # Also ensures dim_track_metadata table exists for dbt
     check_enrichment = ShortCircuitOperator(
         task_id='check_enrichment_needed',
         python_callable=check_if_enrichment_needed
     )
 
-    # 4. Run Spotify Enrichment if check_enrichment returns True
+    # 3. Run Spotify Enrichment if check_enrichment returns True
     enrich_metadata = BashOperator(
         task_id='enrich_metadata',
         bash_command=f'python {SCRIPTS_DIR}/enrich_metadata.py',
@@ -102,4 +104,13 @@ with DAG(
         }
     )
 
-    scrape_kworb >> load_data >> check_enrichment >> enrich_metadata
+    # 4. Final task for ExternalTaskSensor to wait on
+    # Runs whether enrichment happened or was skipped
+    pipeline_complete = EmptyOperator(
+        task_id='pipeline_complete',
+        trigger_rule='none_failed_min_one_success'
+    )
+
+    # Dependencies: load -> check -> enrich -> complete
+    # The trigger_rule on pipeline_complete ensures it runs even if enrichment is skipped
+    load_data >> check_enrichment >> enrich_metadata >> pipeline_complete
