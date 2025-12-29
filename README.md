@@ -26,21 +26,33 @@ The 85% reported here is higher than the commonly cited 65-70% for the big 3 bec
 
 ```mermaid
 flowchart TB
-    subgraph Airflow["Airflow Orchestration"]
+    subgraph Ingest["music_market_share_ingest (scheduled 09:00)"]
         direction TB
-        Daily_Trigger((Daily)) --> Scrape[Scrape Kworb]
-        Daily_Trigger --> Stocks[Fetch Yahoo Finance]
-        Scrape --> Load[Load to DuckDB]
-        Load --> Check{New Tracks?}
-        Check -- Yes --> Enrich[Spotify API Enrichment]
-        Check -- No --> Skip[Skip API Calls]
+        Scrape[Scrape Kworb] --> Trigger[Trigger Pipeline]
+        Trigger --> Wait[Wait for Pipeline]
+        Wait --> DBT[dbt Build]
     end
 
+    subgraph Pipeline["music_market_share_pipeline (triggered)"]
+        direction TB
+        Load[Load to DuckDB] --> Check{New Tracks?}
+        Check -- Yes --> Enrich[Spotify API Enrichment]
+        Check -- No --> Skip[Skip API Calls]
+        Enrich --> Complete[pipeline_complete]
+        Skip --> Complete
+    end
+
+    subgraph Financials["music_financials_daily (scheduled 09:15)"]
+        Stocks[Fetch Yahoo Finance]
+    end
+
+    Trigger -.-> |TriggerDagRunOperator| Load
+    Complete -.-> |ExternalTaskSensor| Wait
+
     subgraph Data["Data Warehouse"]
-        Load -.-> |Insert| RAW_Charts[Raw Charts]
-        Enrich -.-> |Update| RAW_Meta[Raw Metadata]
-        Stocks -.-> |Insert| RAW_Fin[Raw Financials]
-        
+        Scrape -.-> RAW_Charts[Raw Charts]
+        Enrich -.-> RAW_Meta[Raw Metadata]
+        Stocks -.-> RAW_Fin[Raw Financials]
         RAW_Charts --> STG
         RAW_Meta --> STG
         RAW_Fin --> STG
@@ -48,7 +60,7 @@ flowchart TB
     end
 ```
 
-Daily charts are scraped from Kworb via Playwright. A trigger in Airflow checks the staging area for new tracks and only calls the Spotify API if metadata is missing, saving API quota and execution time. Financial data is fetched independently. dbt transforms resolve ownership hierarchies and aggregate streams.
+Daily charts are scraped from Kworb via Playwright. The ingest DAG then **triggers** the pipeline DAG and **waits** for it to complete before running dbt. A **Smart Trigger** in the pipeline checks the staging area for new tracks and only calls the Spotify API if metadata is missing, saving API quota and execution time. Financial data is fetched independently on an offset schedule to avoid DuckDB write contention.
 
 **Stack:** Docker · Airflow · DuckDB · dbt · NetworkX
 
@@ -80,7 +92,7 @@ cp .env.example .env  # Add Spotify credentials for enrichment
 docker compose up --build
 ```
 
-Open Airflow at `localhost:8080` (admin/admin). Trigger `setup_musicbrainz_data`, then unpause `music_market_share_ingest`.
+Open Airflow at `localhost:8080` (admin/admin). Trigger `setup_musicbrainz_data`, then unpause both `music_market_share_ingest` and `music_market_share_pipeline` (the pipeline DAG is trigger-only but must be unpaused to accept triggers).
 
 Query results:
 ```bash
@@ -94,10 +106,10 @@ duckdb data/music_warehouse.duckdb "
 
 | Source | Description | Update |
 |--------|-------------|--------|
-| [Kworb](https://kworb.net) | Daily Spotify global charts | Daily (Airflow) |
+| [Kworb](https://kworb.net) | Daily Spotify global charts | Daily 09:00 (Airflow) |
 | [MusicBrainz](https://musicbrainz.org) | Label ownership relationships | One-off / Manual |
-| Spotify API | Track → album → label metadata | Daily (Airflow) |
-| Yahoo Finance | UMG.AS, WMG, SONY stock prices | Daily (Airflow) |
+| Spotify API | Track → album → label metadata | Triggered (smart enrichment) |
+| Yahoo Finance | UMG.AS, WMG, SONY stock prices | Daily 09:15 (Airflow) |
 
 ## Future Work
 
