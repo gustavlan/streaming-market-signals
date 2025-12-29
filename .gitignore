@@ -150,6 +150,11 @@ data/music_warehouse.duckdb
 data/**/*.tmp
 data/**/*.tmp/
 
+# dbt artifacts (generated)
+dbt_project/target/
+dbt_project/logs/
+dbt_project/dbt_packages/
+
 # Spyder project settings
 .spyderproject
 .spyproject
