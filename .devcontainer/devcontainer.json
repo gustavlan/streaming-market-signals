@@ -9,7 +9,7 @@
     "DBT_PROFILES_DIR": "dbt_project",
     "DBT_TARGET": "ci"
   },
-  "postCreateCommand": "pip install -e '.[dev]' && playwright install --with-deps chromium && cd dbt_project && dbt deps",
+  "postCreateCommand": "pip install uv && uv pip install -e '.[dev]' --system && playwright install --with-deps chromium && cd dbt_project && dbt deps",
   "customizations": {
     "vscode": {
       "extensions": [
