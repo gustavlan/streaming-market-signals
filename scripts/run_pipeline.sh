@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Default env vars (can be overridden by GHA workflow or .env)
+export DBT_TARGET="${DBT_TARGET:-ci}"
+export DUCKDB_PATH="${DUCKDB_PATH:-data/music_warehouse.duckdb}"
+export KWORB_PARQUET_GLOB="${KWORB_PARQUET_GLOB:-data/raw/kworb/*.parquet}"
+export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-dbt_project}"
+
 echo "=== Step 1: Scrape Kworb charts ==="
 python scripts/scrape_kworb.py
 
 echo "=== Step 2: Load MusicBrainz data ==="
 python scripts/load_musicbrainz.py
 
-echo "=== Step 3: Build label hierarchy ==="
+echo "=== Step 3: Build MusicBrainz dbt models ==="
+cd dbt_project && dbt deps --quiet && dbt run --target "$DBT_TARGET" --select stg_musicbrainz_labels int_label_relationships && cd ..
+
+echo "=== Step 4: Build label hierarchy ==="
 python scripts/build_hierarchy.py
 
-echo "=== Step 4: Bootstrap DuckDB views for enrichment ==="
+echo "=== Step 5: Bootstrap DuckDB views for enrichment ==="
 python - <<'PYEOF'
 import os, duckdb
 
@@ -48,20 +57,20 @@ con.close()
 print("Bootstrap done: stg_combined_charts view + dim_track_metadata table ready.")
 PYEOF
 
-echo "=== Step 5: Enrich metadata via Spotify ==="
+echo "=== Step 6: Enrich metadata via Spotify ==="
 if [ -z "${SPOTIPY_CLIENT_ID:-}" ]; then
   echo "WARNING: SPOTIPY_CLIENT_ID is unset, skipping Spotify enrichment"
 else
   python scripts/enrich_metadata.py
 fi
 
-echo "=== Step 6: Run dbt transformations ==="
-cd dbt_project && dbt deps && dbt run --target ci && cd ..
+echo "=== Step 7: Run full dbt transformations ==="
+cd dbt_project && dbt run --target "$DBT_TARGET" && cd ..
 
-echo "=== Step 7: Fetch financial data ==="
+echo "=== Step 8: Fetch financial data ==="
 python scripts/fetch_financials.py
 
-echo "=== Step 8: Execute analysis notebook ==="
+echo "=== Step 9: Execute analysis notebook ==="
 jupyter nbconvert --to notebook --execute notebooks/market_share_alpha.ipynb \
   --output market_share_alpha.ipynb \
   --ExecutePreprocessor.timeout=600
