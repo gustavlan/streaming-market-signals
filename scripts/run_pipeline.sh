@@ -3,9 +3,20 @@ set -euo pipefail
 
 # Default env vars (can be overridden by GHA workflow or .env)
 export DBT_TARGET="${DBT_TARGET:-ci}"
-export DUCKDB_PATH="${DUCKDB_PATH:-data/music_warehouse.duckdb}"
-export KWORB_PARQUET_GLOB="${KWORB_PARQUET_GLOB:-data/raw/kworb/*.parquet}"
-export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-dbt_project}"
+
+# Resolve relative paths to absolute so they work after cd into dbt_project/
+REPO_ROOT="$(pwd)"
+_duckdb="${DUCKDB_PATH:-data/music_warehouse.duckdb}"
+_parquet="${KWORB_PARQUET_GLOB:-data/raw/kworb/*.parquet}"
+[[ "$_duckdb" != /* ]] && _duckdb="${REPO_ROOT}/${_duckdb}"
+[[ "$_parquet" != /* ]] && _parquet="${REPO_ROOT}/${_parquet}"
+export DUCKDB_PATH="$_duckdb"
+export KWORB_PARQUET_GLOB="$_parquet"
+
+# Resolve DBT_PROFILES_DIR to absolute path so dbt finds it after cd
+_profiles="${DBT_PROFILES_DIR:-dbt_project}"
+[[ "$_profiles" != /* ]] && _profiles="${REPO_ROOT}/${_profiles}"
+export DBT_PROFILES_DIR="$_profiles"
 
 echo "=== Step 1: Scrape Kworb charts ==="
 python scripts/scrape_kworb.py

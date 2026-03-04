@@ -16,11 +16,10 @@ music_warehouse:
         temp_directory: '/opt/airflow/data/tmp'
     ci:
       type: duckdb
-      path: data/music_warehouse.duckdb
+      path: "{{ env_var('DUCKDB_PATH', 'data/music_warehouse.duckdb') }}"
       extensions:
         - httpfs
         - parquet
       threads: 1
       settings:
         memory_limit: '3GB'
-        temp_directory: 'data/tmp'
