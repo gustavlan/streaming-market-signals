@@ -7,7 +7,7 @@
 -- We want to traverse from subsidiary -> owner (following the ownership chain upward)
 -- So we need to handle direction correctly in the join condition
 
-with ownership_edges as (
+with recursive ownership_edges as (
     -- Normalize edges to always point from owned_label -> owner_label
     select
         case 
@@ -31,7 +31,7 @@ with ownership_edges as (
     and direction is not null
 ),
 
-recursive hierarchy as (
+hierarchy as (
     -- Anchor member: select all labels as starting points
     select 
         label_id,
@@ -76,5 +76,4 @@ select
         else 'Independent / Other'
     end as market_share_group
 from ranked_hierarchy
-where rn = 1
 where rn = 1
