@@ -17,4 +17,10 @@ music_warehouse:
     ci:
       type: duckdb
       path: data/music_warehouse.duckdb
-      temp_directory: data/tmp
+      extensions:
+        - httpfs
+        - parquet
+      threads: 1
+      settings:
+        memory_limit: '3GB'
+        temp_directory: 'data/tmp'

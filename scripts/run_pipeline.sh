@@ -10,13 +10,43 @@ python scripts/load_musicbrainz.py
 echo "=== Step 3: Build label hierarchy ==="
 python scripts/build_hierarchy.py
 
-echo "=== Step 4: Create stg_combined_charts view ==="
-python -c "
-import duckdb, os
-db = duckdb.connect(os.environ['DUCKDB_PATH'])
-db.execute(\"CREATE OR REPLACE VIEW stg_combined_charts AS SELECT * FROM read_parquet('\" + os.environ['KWORB_PARQUET_GLOB'] + \"')\")
-db.close()
-"
+echo "=== Step 4: Bootstrap DuckDB views for enrichment ==="
+python - <<'PYEOF'
+import os, duckdb
+
+db_path = os.environ["DUCKDB_PATH"]
+parquet_glob = os.environ["KWORB_PARQUET_GLOB"]
+con = duckdb.connect(db_path)
+
+# Recreate the combined charts view with proper column transforms
+# (enrich_metadata.py expects track_name, artist_name, daily_streams)
+con.execute(f"""
+    CREATE OR REPLACE VIEW stg_combined_charts AS
+    WITH daily_scrape AS (
+        SELECT * FROM read_parquet('{parquet_glob}')
+    )
+    SELECT
+        chart_date,
+        trim(split_part(artist_and_title, ' - ', 1)) AS artist_name,
+        trim(substring(artist_and_title, length(split_part(artist_and_title, ' - ', 1)) + 4)) AS track_name,
+        streams AS daily_streams,
+        extracted_at
+    FROM daily_scrape
+""")
+
+# Ensure dim_track_metadata exists (enrichment reads/writes it)
+con.execute("""
+    CREATE TABLE IF NOT EXISTS dim_track_metadata (
+        track_name VARCHAR,
+        artist_name VARCHAR,
+        spotify_label VARCHAR,
+        spotify_track_id VARCHAR,
+        updated_at TIMESTAMP
+    )
+""")
+con.close()
+print("Bootstrap done: stg_combined_charts view + dim_track_metadata table ready.")
+PYEOF
 
 echo "=== Step 5: Enrich metadata via Spotify ==="
 if [ -z "${SPOTIPY_CLIENT_ID:-}" ]; then
