@@ -1,7 +1,7 @@
 # connecting dbt transformer to the duckdb data warehouse
 
 music_warehouse:
-  target: dev
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
   outputs:
     dev:
       type: duckdb
@@ -14,3 +14,7 @@ music_warehouse:
         # Cap DuckDB's RAM usage so it doesn't get killed (needed for parentl label query)
         memory_limit: '3GB'
         temp_directory: '/opt/airflow/data/tmp'
+    ci:
+      type: duckdb
+      path: data/music_warehouse.duckdb
+      temp_directory: data/tmp
