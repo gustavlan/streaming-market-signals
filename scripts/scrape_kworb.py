@@ -1,6 +1,7 @@
 import os
 import logging
 from datetime import datetime, timedelta
+from io import StringIO
 import pandas as pd
 from playwright.sync_api import sync_playwright
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -43,7 +44,7 @@ def scrape_kworb():
     html_content = fetch_page_content()
 
     logger.info("Parsing HTML table")
-    dfs = pd.read_html(html_content)
+    dfs = pd.read_html(StringIO(html_content))
 
     if not dfs:
         raise ValueError("No tables found on the page")
