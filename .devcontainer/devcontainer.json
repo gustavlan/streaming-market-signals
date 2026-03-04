@@ -1,18 +1,23 @@
 {
   "name": "Music Warehouse Dev",
-  "dockerComposeFile": [
-    "../docker-compose.yml"
-  ],
-  "service": "airflow-scheduler", 
-  "workspaceFolder": "/opt/airflow",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "containerEnv": {
+    "DATA_DIR": "data",
+    "DUCKDB_PATH": "data/music_warehouse.duckdb",
+    "KWORB_PARQUET_GLOB": "data/raw/kworb/*.parquet",
+    "MUSICBRAINZ_RAW_DIR": "data/raw/musicbrainz",
+    "DBT_PROFILES_DIR": "dbt_project",
+    "DBT_TARGET": "ci"
+  },
+  "postCreateCommand": "pip install -e '.[dev]' && playwright install --with-deps chromium && cd dbt_project && dbt deps",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
+        "ms-toolsai.jupyter",
         "innoverio.vscode-dbt-power-user",
-        "mechatroner.rainbow-csv"
+        "ms-python.black-formatter"
       ]
     }
-  },
-  "remoteUser": "airflow"
+  }
 }
